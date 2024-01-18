@@ -56,8 +56,8 @@ class Metric(metaclass=ABCMeta):
         return
 
     def compute(self):
-        x1_array = np.array(self.x1, dtype=np.float)
-        x2_array = np.array(self.x2, dtype=np.float)
+        x1_array = np.array(self.x1, dtype= float)
+        x2_array = np.array(self.x2, dtype= float)
         return self._compute(x1_array.ravel(), x2_array.ravel())
 
     def _check_type(self, x):

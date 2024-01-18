@@ -69,7 +69,8 @@ class IQADataset(torch.utils.data.Dataset):
         return len(self.img_list)
 
     def _loader(self, name):
-        return io.imread(join(self.data_dir, name))
+        #return io.imread(join(self.data_dir, name))
+        return io.imread(name)
 
     def _to_patch_tensors(self, img, ref):
             img_ptchs, ref_ptchs = self.tfs.to_patches(img, ref, ptch_size=32, n_ptchs=self.n_ptchs)

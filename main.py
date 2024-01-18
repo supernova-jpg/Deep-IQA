@@ -33,8 +33,8 @@ def validate(val_loader, model, criterion, show_step=False):
 
     with torch.no_grad():
         for i, ((img,ref), score) in enumerate(val_loader):
-            img, ref, score = img.cuda(), ref.cuda(), score.squeeze().cuda()
-
+            #img, ref, score = img.cuda(), ref.cuda(), score.squeeze().cuda()
+            score = score.squeeze()
             # Compute output
             output = model(img, ref)
             
@@ -65,9 +65,11 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
     # Switch to train mode
     model.train()
-    criterion.cuda()
+    #criterion.cuda()
+    criterion
+
     for i, ((img,ref), score) in enumerate(train_loader):
-        img, ref, score = img.cuda(), ref.cuda(), score.cuda()
+        #img, ref, score = img.cuda(), ref.cuda(), score.cuda()
 
         # Compute output
         output = model(img, ref)
@@ -140,7 +142,7 @@ def train_iqa(args):
         batch_size=batch_size, shuffle=True, num_workers=num_workers,
         pin_memory=True, drop_last=True
     )
-    print("OK")
+    
     val_loader = torch.utils.data.DataLoader(
         IQADataset(data_dir, 'val', list_dir=list_dir, 
         n_ptchs=n_ptchs, sample_once=True),
@@ -179,16 +181,19 @@ def train_iqa(args):
         lr = adjust_learning_rate(args, optimizer, epoch)
         print("\nEpoch: [{0}]\tlr {1:.06f}".format(epoch, lr))
         # Train for one epoch
-        train(train_loader, model.cuda(), criterion, optimizer, epoch)
+        #train(train_loader, model.cuda(), criterion, optimizer, epoch)
+        train(train_loader, model, criterion, optimizer, epoch)
 
         if epoch % 1 == 0:    
             # Evaluate on validation set
-            loss = validate(val_loader, model.cuda(), criterion)
-            
+            #loss = validate(val_loader, model.cuda(), criterion)
+            loss = validate(val_loader, model, criterion)
+
             is_best = loss < min_loss
             min_loss = min(loss, min_loss)
             print("Current: {:.6f}\tBest: {:.6f}\t".format(loss, min_loss))
-            checkpoint_path = '../models/checkpoint_latest.pkl'
+            checkpoint_path = './models/checkpoint_latest.pkl'
+
             save_checkpoint({
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
@@ -196,7 +201,7 @@ def train_iqa(args):
             }, is_best, filename=checkpoint_path)
 
             if epoch % args.dump_per == 0:
-                history_path = '../models/checkpoint_{:03d}.pkl'.format(epoch+1)
+                history_path = './models/checkpoint_{:03d}.pkl'.format(epoch+1)
                 shutil.copyfile(checkpoint_path, history_path)
             
 
@@ -235,7 +240,8 @@ def test_iqa(args):
         else:
             print("=> no checkpoint found at '{}'".format(resume))
 
-    test(test_loader, model.cuda())
+    #test(test_loader, model.cuda())
+    test(test_loader, model)
 
 
 def adjust_learning_rate(args, optimizer, epoch):
@@ -258,13 +264,13 @@ def adjust_learning_rate(args, optimizer, epoch):
 def save_checkpoint(state, is_best, filename='checkpoint.pkl'):
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, '../models/model_best.pkl')
+        shutil.copyfile(filename, './models/model_best.pkl')
 
 
 def parse_args():
     # Training settings
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('cmd', choices=['train', 'test'])
+    parser.add_argument('-cmd', choices=['train', 'test'],default='train')
     parser.add_argument('-d', '--data-dir', default='./data/TID2013/')
     parser.add_argument('-l', '--list-dir', default='./data/TID2013/',
                         help='List dir to look for train_images.txt etc. '
@@ -299,10 +305,8 @@ def parse_args():
 
     return args
 
-if __name__ == '__main__':
-    args = parse_args()
-    train_iqa(args)
-"""
+ 
+
 if __name__ == '__main__':
     args = parse_args()
     # Choose dataset
@@ -312,4 +316,3 @@ if __name__ == '__main__':
         train_iqa(args)
     elif args.cmd == 'test':
         test_iqa(args)
-"""
