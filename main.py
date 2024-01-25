@@ -5,6 +5,7 @@ Main Script
 
 import sys
 import os
+import csv
 
 import shutil
 import argparse
@@ -87,35 +88,53 @@ def train(train_loader, model, criterion, optimizer, epoch):
                 "Loss {loss.val:.4f} ({loss.avg:.4f})\t"
                 .format(i+1, len_train, loss=losses))
                 
-def test(test_data_loader, model):
+def test(test_data_loader, model, csv_file= './models/test_results.csv'):
     srocc = SROCC()
     plcc = PLCC()
     rmse = RMSE()
     len_test = len(test_data_loader)
     pb = ProgressBar(len_test, show_step=True)
 
+
+
     print("Testing")
 
-    model.eval()
-    with torch.no_grad():
-        for i, ((img, ref), score) in enumerate(test_data_loader):
-            img, ref = img.cuda(), ref.cuda()
-            output = model(img, ref).cpu().data.numpy()
-            score = score.data.numpy()
+    # 准备写入CSV文件
+    assert(os.path.exists(csv_file))
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Index', 'Predicted Score', 'Actual Score'])
 
-            srocc.update(score, output)
-            plcc.update(score, output)
-            rmse.update(score, output)
+        model.eval()
+        with torch.no_grad():
+            for i, ((img, ref), score) in enumerate(test_data_loader):
+                # img, ref = img.cuda(), ref.cuda()
+                output = model(img, ref).cpu().data.numpy()
+                score = score.data.numpy()
 
-            pb.show(i, "Test: [{0:5d}/{1:5d}]\t"
-                    "Score: {2:.4f}\t"
-                    "Label: {3:.4f}"
-                    .format(i+1, len_test, float(output), float(score)))
 
+
+                srocc.update(score, output)
+                plcc.update(score, output)
+                rmse.update(score, output)
+                
+                output = "{:.3f}".format(float(output))
+                score = "{:.3f}".format(float(score))
+
+                # 更新进度条
+                pb.show(i, "Test: [{0:5d}/{1:5d}]\t"
+                        "Score: {2:.4f}\t"
+                        "Label: {3:.4f}"
+                        .format(i+1, len_test, float(output), float(score)))
+
+                # 写入数据到CSV文件
+                writer.writerow([i+1, float(output), float(score)])
+
+    # 打印最终的评估指标
     print("\n\nSROCC: {0:.4f}\n"
-            "PLCC: {1:.4f}\n"
-            "RMSE: {2:.4f}"
-            .format(srocc.compute(), plcc.compute(), rmse.compute())
+          "PLCC: {1:.4f}\n"
+          "RMSE: {2:.4f}"
+          .format(srocc.compute(), plcc.compute(), rmse.compute())
     )
 
 
@@ -124,7 +143,7 @@ def train_iqa(args):
     num_workers = args.workers
     data_dir = args.data_dir
     list_dir = args.list_dir
-    resume = args.resume
+    resume = args.resume_latest
     n_ptchs = args.n_ptchs_per_img
 
     print(' '.join(sys.argv))
@@ -174,7 +193,7 @@ def train_iqa(args):
             print("=> no checkpoint found at '{}'".format(resume))
 
     if args.evaluate:
-        validate(val_loader, model.cuda(), criterion, show_step=True)
+        validate(val_loader, model, criterion, show_step=True)
         return
 
     for epoch in range(start_epoch, args.epochs):
@@ -212,7 +231,8 @@ def test_iqa(args):
     subset = args.subset
     data_dir = args.data_dir
     list_dir = args.list_dir
-    resume = args.resume
+    resume = args.resume_best
+  
 
     for k, v in args.__dict__.items():
         print(k, ':', v)
@@ -270,14 +290,14 @@ def save_checkpoint(state, is_best, filename='checkpoint.pkl'):
 def parse_args():
     # Training settings
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('-cmd', choices=['train', 'test'],default='train')
+    parser.add_argument('-cmd', choices=['train', 'test'], default= 'test')
     parser.add_argument('-d', '--data-dir', default='./data/TID2013/')
     parser.add_argument('-l', '--list-dir', default='./data/TID2013/',
                         help='List dir to look for train_images.txt etc. '
                              'It is the same with --data-dir if not set.')
     parser.add_argument('-n', '--n-ptchs-per-img', type=int, default=32, metavar='N', 
                         help='number of patches for each image (default: 32)')
-    parser.add_argument('--step', type=int, default=200)
+    parser.add_argument('--step', type=int, default= 10)
     parser.add_argument('--batch-size', type=int, default=64, metavar='B',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--epochs', type=int, default=1000, metavar='NE',
@@ -287,8 +307,10 @@ def parse_args():
     parser.add_argument('--lr-mode', type=str, default='const')
     parser.add_argument('--weight-decay', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)')
-    parser.add_argument('--resume', default='', type=str, metavar='PATH',
-                        help='path to latest checkpoint')
+    parser.add_argument('--resume_latest', default='./models/checkpoint_latest.pkl', type=str, metavar='PATH',
+                        help='path to the optimized checkpoint')
+    parser.add_argument('--resume_best', default='./models/model_best.pkl', type=str, metavar='PATH',
+                        help='path to the optimized checkpoint')
     parser.add_argument('--workers', type=int, default=8)
     parser.add_argument('--subset', default='test')
     parser.add_argument('--evaluate', dest='evaluate',
